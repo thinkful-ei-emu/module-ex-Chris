@@ -1,4 +1,4 @@
-/* eslint-disable no-undef */
+
 /* eslint-disable no-console */
 'use strict';
 
@@ -6,20 +6,35 @@
 
 const STORE = {
   items: [
-    {id: cuid(), name: 'apples', checked: false},
-    {id: cuid(), name: 'oranges', checked: false},
-    {id: cuid(), name: 'milk', checked: true},
-    {id: cuid(), name: 'bread', checked: false}
+    {id: cuid(), name: 'apples', checked: false, beingEdited: false},
+    {id: cuid(), name: 'oranges', checked: false, beingEdited: false},
+    {id: cuid(), name: 'milk', checked: true, beingEdited: false},
+    {id: cuid(), name: 'bread', checked: false, beingEdited: false}
   ],
   hideCompleted: false,
-  searchCompleted: null
+  searchEntry: null
 };
   
-  
+/**
+ * For the name change, the question becomes, how do we grab the edited name?
+ * This should happen in the generateItemElement section as this is where the
+ * name is initially generated as well. 
+ */
 function generateItemElement(item) {
+  let itemTitleName;
+  if (item.beingEdited) {
+    itemTitleName = `
+      <form id="edit-name-form">
+        <input type="text" name="edit-name" class="js-edit-name" value="${item.name}" />
+      </form>`;
+  }
+  else {
+    itemTitleName = 
+    `<span class="shopping-item js-shopping-item ${item.checked ? 'shopping-item__checked' : ''}">${item.name}</span>`;
+  }
   return `
       <li data-item-id="${item.id}">
-        <span class="shopping-item js-shopping-item ${item.checked ? 'shopping-item__checked' : ''}" contenteditable="true">${item.name}</span>
+        ${itemTitleName}
         <div class="shopping-item-controls">
           <button class="shopping-item-toggle js-item-toggle">
               <span class="button-label">check</span>
@@ -50,9 +65,9 @@ function renderShoppingList() {
     filteredItems = filteredItems.filter(item => !item.checked);
   }
 
-  $('.js-shopping-list-search-entry').val(STORE.searchTerm);
-  if (STORE.searchCompleted) {
-    filteredItems = filteredItems.filter(item => item.name.includes(STORE.searchTerm));
+  $('.js-shopping-list-search-entry').val(STORE.searchEntry);
+  if (STORE.searchEntry) {
+    filteredItems = filteredItems.filter(item => item.name.includes(STORE.searchEntry));
   }
 
   const shoppingListItemsString = generateShoppingItemsString(filteredItems);
@@ -124,28 +139,70 @@ function handleToggleHideFilter() {
   });
 }
 
-// Toggle the STORE.searchCompleted property
-function setSearchFilter(searchTerm) {
-  STORE.searchCompleted = searchTerm;
+// Toggle the STORE.searchEntry property
+function setSearchEntry(searchEntry) {
+  STORE.searchEntry = searchEntry;
 }
 
 //Places an event listener on the search button
 function handleNewSearch() {
-  $('#js-shopping-list-search-form').on('submit', event => {
+  $('#js-search-form').on('submit', event => {
     event.preventDefault();
     console.log('`handleNewSearch` ran');
-    const searchTerm = $('.js-shopping-list-search-entry').val();
-    setSearchFilter(searchTerm);
+    const searchEntry = $('.js-search-entry').val();
+    setSearchEntry(searchEntry);
     renderShoppingList();
   });
 }
 //Places an event listener on the clear button
-function clearSearch() {
-  $('#js-shopping-list-search-form').click( () => {
-    setSearchFilter('');
+function handleClearSearch() {
+  $('#reset').on('click', () => {
+    setSearchEntry('');
     renderShoppingList();    
   });
 }
+/**
+ * Once we click on the text, we want the system to recognize that we are going to be
+ * manipulating that information on the page. We need to alter the current state of
+ * the object. This has to be done for each one individually like when we did the check
+ * and uncheck.
+ */
+function itemBeingEdited (itemId, beingEdited) {
+  const targetItem = STORE.items.find(item => item.id === itemId);
+  targetItem.beingEdited = beingEdited;
+}
+
+// Place an event listener on an item name to set to editing mode
+function handleItemNameClick() {
+  $('.js-shopping-list').on('click', '.js-shopping-item', event => {
+    const id = getItemIdFromElement(event.target);//recognize the id of the clicked object
+    itemBeingEdited(id,true);
+    renderShoppingList();
+  });
+}
+
+/**
+ * Now that we are in the process of submitting the edit, we need to make sure the object
+ * resets itself to it's original state without altering the text edits.
+ */
+function editedName(itemId, nameEdit) {
+  const targetItem = STORE.items.find(item => item.id === itemId);
+  targetItem.name = nameEdit;
+}
+
+// Place an event listener on the edit item name form and
+//ultimately setting the id back to false after the process has ran.
+function handleEditItemForm() {
+  $('.js-shopping-list').on('submit', '#edit-name-form', event => {
+    event.preventDefault();
+    const id = getItemIdFromElement(event.target);
+    const nameChange = $('.js-edit-name').val();
+    editedName(id, nameChange);
+    itemBeingEdited(id,false);
+    renderShoppingList();
+  });
+}
+
 // this function will be our callback when the page loads. it's responsible for
 // initially rendering the shopping list, and activating our individual functions
 // that handle new item submission and user clicks on the "check" and "delete" buttons
@@ -157,7 +214,9 @@ function handleShoppingList() {
   handleDeleteItemClicked();
   handleToggleHideFilter();
   handleNewSearch();
-  clearSearch();
+  handleClearSearch();
+  handleItemNameClick();
+  handleEditItemForm();
 }
   
 // when the page loads, call `handleShoppingList`
